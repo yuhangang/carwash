@@ -33,6 +33,10 @@ class CarWashQueueBloc extends Bloc<CarWashQueueEvent, CarWashQueueState> {
           washing: null,
           orderToBePickedUp: _queueRepository.getOrderToBePickedUp()));
     });
+
+    on<CarWashQueueLoadingEvent>((event, emit) {
+      _queueRepository.initStream();
+    });
   }
 
   @override

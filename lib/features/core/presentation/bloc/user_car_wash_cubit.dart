@@ -44,7 +44,10 @@ class UserCarWashCubit extends Cubit<UserCarWashState> {
     _queueRepository.addOrder(vehicle);
   }
 
-  Future<void> pickUpVehicle(Order order) async {
-    _queueRepository.pickUp(order);
+  Future<void> pickUpVehicle(String ticketNumber, Order order) async {
+    final exception = await _queueRepository.pickUp(ticketNumber);
+    if (exception != null) {
+      emit(UserCarWashPickUpError(order: order, exception: exception));
+    }
   }
 }

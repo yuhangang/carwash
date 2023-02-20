@@ -8,58 +8,64 @@ import 'package:quickwash/features/core/data/model/vehicle.dart';
 import 'package:queue/queue.dart';
 
 abstract class QueueRepository {
-  Stream<Order> getOrderStream();
-  Future<void> addOrder(Vehicle vehicle);
   List<Order> getQueue();
   List<Order> getOrderToBePickedUp();
   Order? getCurrentWashingCar();
-  Future<void> pickUp(Order order);
+
+  void initStream();
+  Stream<Order> getOrderStream();
+  Future<void> addOrder(Vehicle vehicle);
+  Future<Exception?> pickUp(String ticketNumber);
 }
 
 class QueueRepositoryImpl implements QueueRepository {
   final CircularQueue<Order> _queue = CircularQueue();
   int _counter = 0;
-  Timer? carPlateGenerationTimer;
   final List<Order> _orderToBePickedUp = [];
+  final _streamController = StreamController<Order>.broadcast();
 
-  QueueRepositoryImpl() {
-    initStream();
-  }
+  QueueRepositoryImpl();
   Order? washing;
+
+  @override
+  List<Order> getQueue() => _queue.getQueue();
+  @override
+  List<Order> getOrderToBePickedUp() => _orderToBePickedUp;
+  @override
+  Order? getCurrentWashingCar() => washing;
 
   String get _nextTicketNumber {
     _counter++;
-    return _counter.toString().padLeft(6, "0");
+    return "#${_counter.toString().padLeft(6, "0")}";
   }
 
-  final controller = StreamController<Order>.broadcast();
+  @override
+  void initStream() {
+    addOrder(Vehicle(carPlate: getRandomCarPlate()));
+    addOrder(Vehicle(carPlate: getRandomCarPlate()));
+    addOrder(Vehicle(carPlate: getRandomCarPlate()));
 
-  initStream() {
-    carPlateGenerationTimer = Timer.periodic(
-        const Duration(seconds: AppConfig.newQueueFrequencyInSecond), (timer) {
+    Timer.periodic(const Duration(seconds: AppConfig.newQueueFrequencyInSecond),
+        (timer) {
       addOrder(Vehicle(carPlate: getRandomCarPlate()));
     });
-
-    controller.stream
-        .where((event) => event.orderStatus == OrderStatus.readyOrPickUp)
-        .listen((event) {});
   }
 
   serveStream() async {
     if (_queue.isNotEmpty()) {
       if (washing == null) {
         washing = Order.moveVehicleToWashingPoint(_queue.dequeue());
-        controller.sink.add(washing!);
+        _streamController.sink.add(washing!);
         Future.delayed(
             const Duration(seconds: AppConfig.carWashFrequencyInSecond), () {
           var order = Order.moveVehicleToPickOutPoint(washing!);
-          controller.sink.add(order);
+          _streamController.sink.add(order);
           _orderToBePickedUp.insert(0, order);
 
           washing = null;
         });
       } else {
-        await controller.stream
+        await _streamController.stream
             .firstWhere((e) => e.orderStatus == OrderStatus.readyOrPickUp);
         serveStream();
       }
@@ -67,32 +73,27 @@ class QueueRepositoryImpl implements QueueRepository {
   }
 
   @override
-  Stream<Order> getOrderStream() => controller.stream;
+  Stream<Order> getOrderStream() => _streamController.stream;
 
   @override
   Future<void> addOrder(Vehicle vehicle) async {
-    final order = Order.create(ticket: _nextTicketNumber, vehicle: vehicle);
-    controller.sink.add(order);
+    final order =
+        Order.create(ticketNumber: _nextTicketNumber, vehicle: vehicle);
+    _streamController.sink.add(order);
     _queue.enqueue(order);
     serveStream();
   }
 
   @override
-  List<Order> getQueue() => _queue.getQueue();
-
-  @override
-  List<Order> getOrderToBePickedUp() => _orderToBePickedUp;
-
-  @override
-  Order? getCurrentWashingCar() => washing;
-
-  @override
-  Future<void> pickUp(Order order) async {
-    if (_orderToBePickedUp.contains(order)) {
-      bool success = _orderToBePickedUp.remove(order);
-      if (success) {
-        controller.sink.add(Order.complete(order));
-      }
+  Future<Exception?> pickUp(String ticketNumber) async {
+    final index = _orderToBePickedUp
+        .indexWhere((element) => element.ticketNumber == ticketNumber);
+    if (index != -1) {
+      final order = _orderToBePickedUp.removeAt(index);
+      _streamController.sink.add(Order.complete(order));
+      return null;
+    } else {
+      return Exception("Invalid tickets");
     }
   }
 }

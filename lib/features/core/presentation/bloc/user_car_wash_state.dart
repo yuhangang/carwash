@@ -7,23 +7,35 @@ class UserCarWashInitial extends UserCarWashState {}
 
 class UserCarWashCompleted extends UserCarWashState {}
 
-class UserCarInQueue extends UserCarWashState {
+abstract class UserHasActiveOrder extends UserCarWashState {
   final Order order;
+  UserHasActiveOrder({
+    required this.order,
+  });
+}
+
+class UserCarInQueue extends UserHasActiveOrder {
   UserCarInQueue({
-    required this.order,
+    required super.order,
   });
 }
 
-class UserCarInWashing extends UserCarWashState {
-  final Order order;
+class UserCarInWashing extends UserHasActiveOrder {
   UserCarInWashing({
-    required this.order,
+    required super.order,
   });
 }
 
-class UserCarReadyToPickup extends UserCarWashState {
-  final Order order;
+class UserCarReadyToPickup extends UserHasActiveOrder {
   UserCarReadyToPickup({
-    required this.order,
+    required super.order,
+  });
+}
+
+class UserCarWashPickUpError extends UserCarReadyToPickup {
+  final Exception exception;
+  UserCarWashPickUpError({
+    required super.order,
+    required this.exception,
   });
 }
